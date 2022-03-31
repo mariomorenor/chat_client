@@ -2,6 +2,13 @@
   <div class="home py-5">
     <div class="is-flex px-5 is-flex-wrap-wrap is-justify-content-center">
       <div class="my-auto room_name">Sala: {{ room.toUpperCase() }}</div>
+      <div class="user-container">
+        <span v-for="user in users" :key="user.id">
+          <b-tooltip position="is-bottom" :label="user.username">
+            <img class="avatar" :src="user.avatar" alt="" />
+          </b-tooltip>
+        </span>
+      </div>
       <div
         class="ml-auto mt-2 is-flex is-flex-wrap-wrap is-justify-content-center"
       >
@@ -44,6 +51,7 @@
 <script>
 import moment from "moment";
 import MessageComponent from "../components/MessageComponent.vue";
+const uiavatar = require("ui-avatars");
 export default {
   name: "Home",
   components: {
@@ -55,11 +63,57 @@ export default {
       room: "",
       messages: [],
       message_temp: "",
+      users: [],
     };
   },
   sockets: {
     message_received(data) {
       this.messages.push(data);
+    },
+    user_connected(data) {
+      // console.log(data);
+      if (data.room == this.room) {
+        var avatarURL = uiavatar.generateAvatar({
+          uppercase: true,
+          name: data.user,
+          background: "random",
+          rounded: true,
+          size: 50,
+        });
+        if (!this.users.some((u) => u.username == data.user)) {
+          this.users.push({
+            username: data.user,
+            avatar: avatarURL,
+          });
+        }
+      }
+    },
+    leave_room(data) {
+      console.log(data);
+      if (this.room == data.room) {
+        console.log(this.users);
+        this.users = this.users.filter((u) => u.username != data.username);
+      }
+    },
+    users_in_room(users) {
+      users.forEach((u) => {
+        if (!this.users.some((user) => user.username == u) ) {
+          var avatarURL = uiavatar.generateAvatar({
+            uppercase: true,
+            name: u,
+            background: "random",
+            rounded: true,
+            size: 50,
+          });
+          
+          this.users.push({
+            username: u,
+            avatar: avatarURL,
+          });
+        }
+      });
+
+      this.users = this.users.filter(u=>u.username != this.user)
     },
   },
   mounted() {
@@ -71,7 +125,8 @@ export default {
       });
     }
     this.$socket.emit("set:username", { username: this.user });
-    this.$socket.emit("join:room", { room: this.room });
+    this.$socket.emit("join:room", { room: this.room, user: this.user });
+    this.$socket.emit("users");
   },
   methods: {
     logout() {
@@ -79,6 +134,7 @@ export default {
       this.$router.replace({
         name: "Login",
       });
+      this.$socket.emit("logout");
     },
     sendMessage() {
       if (this.message_temp == "") return;
